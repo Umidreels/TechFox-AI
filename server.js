@@ -7,15 +7,16 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// 🔐 ENV dan olamiz
-const API_KEY = process.env.O3HREyk24XwldTuzbS9o4Cijskn4MBI0;
+const API_KEY = process.env.MISTRAL_API_KEY;
 
 app.post("/chat", async (req, res) => {
   try {
 
-    const userMessage = req.body.message;
+    if (!API_KEY) {
+      return res.json({ reply: "API KEY yo‘q ❌" });
+    }
 
-    const response = await fetch("https://api.mistral.ai/v1/conversations", {
+    const apiRes = await fetch("https://api.mistral.ai/v1/conversations", {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${API_KEY}`,
@@ -25,37 +26,59 @@ app.post("/chat", async (req, res) => {
         agent_id: "ag_019d4568d82d75a9b13d78ecbecf09a6",
         agent_version: 1,
         inputs: [
-          { role: "user", content: userMessage }
+          { role: "user", content: req.body.message }
         ]
       })
     });
 
-    const data = await response.json();
+    // 🔥 MUHIM: har doim text qilib olamiz
+    const raw = await apiRes.text();
 
-    // 🔥 FULL RESPONSE FIX
+    console.log("RAW RESPONSE:", raw);
+
+    let data;
+
+    try {
+      data = JSON.parse(raw);
+    } catch {
+      return res.json({ reply: "API JSON error ❌" });
+    }
+
     let reply = "";
 
-    if (data.outputs?.length) {
+    if (data.reply) {
+      reply = data.reply;
+    }
+
+    else if (data.outputs?.length) {
+
       const content = data.outputs[0].content;
 
+      // 🔥 ARRAY bo‘lsa
       if (Array.isArray(content)) {
         reply = content.map(i => i.text || "").join("");
-      } else {
+      }
+
+      // 🔥 STRING bo‘lsa
+      else if (typeof content === "string") {
         reply = content;
       }
     }
 
+    if (!reply) {
+      reply = "No response";
+    }
+
     res.json({ reply });
 
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ reply: "Server error ❌" });
+  } catch (e) {
+    console.error("SERVER ERROR:", e);
+    res.json({ reply: "Server error ❌" });
   }
 });
 
-// 🔥 RAILWAY PORT
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
-  console.log("Server running on port:", PORT);
+  console.log("Running on port", PORT);
 });

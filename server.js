@@ -7,7 +7,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-const API_KEY = process.env.MISTRAL_API_KEY;
+const API_KEY = process.env.O3HREyk24XwldTuzbS9o4Cijskn4MBI0;
 
 app.post("/chat", async (req, res) => {
   try {

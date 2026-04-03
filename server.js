@@ -115,12 +115,12 @@ app.post("/chat", async (req, res) => {
     // ❌ API ERROR
     // ==========================
     if (!apiRes.ok) {
-      const errText = await apiRes.text();
-      console.error("API ERROR:", errText);
+  const errText = await apiRes.text();
+  console.error("API ERROR FULL:", errText);
 
-      return res.json({
-        reply: "Serverda muammo yuz berdi ⚠️"
-      });
+  return res.json({
+    reply: "API ERROR: " + errText
+  });
     }
 
     // ==========================

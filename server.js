@@ -9,7 +9,7 @@ app.use(express.json());
 
 const API_KEY = process.env.MISTRAL_API_KEY;
 
-// 🧠 HAR USER UCHUN MEMORY
+// 🧠 MULTI USER MEMORY
 const userHistories = {};
 
 function getHistory(userId) {
@@ -26,7 +26,7 @@ app.use((req, res, next) => {
   const ip = req.headers["x-forwarded-for"] || req.socket.remoteAddress;
   const now = Date.now();
 
-  if (rateLimit[ip] && now - rateLimit[ip] < 4500) {
+  if (rateLimit[ip] && now - rateLimit[ip] < 1500) {
     return res.json({ reply: "Sekinroq yozing 🙂" });
   }
 
@@ -39,20 +39,20 @@ app.get("/", (req, res) => {
   res.send("TechFox AI backend ishlayapti 🚀");
 });
 
-// 💬 CHAT
-app.post("/chat", async (req, res) => {
+// ==========================
+// 🔥 STREAM CHAT
+// ==========================
+app.post("/chat-stream", async (req, res) => {
   try {
 
     if (!API_KEY) {
-      return res.json({ reply: "API KEY yo‘q ❌" });
+      return res.end();
     }
 
     const userId = req.body.user_id || "default";
     const message = req.body.message;
 
-    if (!message) {
-      return res.json({ reply: "Xabar bo‘sh ❌" });
-    }
+    if (!message) return res.end();
 
     const history = getHistory(userId);
 
@@ -61,6 +61,13 @@ app.post("/chat", async (req, res) => {
     if (history.length > 10) {
       userHistories[userId] = history.slice(-10);
     }
+
+    // SSE HEADERS
+    res.writeHead(200, {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      "Connection": "keep-alive"
+    });
 
     const apiRes = await fetch("https://api.mistral.ai/v1/conversations", {
       method: "POST",
@@ -76,9 +83,8 @@ app.post("/chat", async (req, res) => {
     });
 
     if (!apiRes.ok) {
-      const err = await apiRes.text();
-      console.error(err);
-      return res.json({ reply: "Server xatolik ⚠️" });
+      res.write(`data: Xatolik yuz berdi ❌\n\n`);
+      return res.end();
     }
 
     const data = await apiRes.json();
@@ -91,13 +97,32 @@ app.post("/chat", async (req, res) => {
 
     if (!reply) reply = "No response";
 
-    history.push({ role: "assistant", content: reply });
+    // 🔥 STREAM (harfma-harf)
+    let i = 0;
 
-    res.json({ reply });
+    const interval = setInterval(() => {
+
+      if (i < reply.length) {
+        res.write(`data: ${reply[i]}\n\n`);
+        i++;
+      } else {
+
+        clearInterval(interval);
+
+        history.push({
+          role: "assistant",
+          content: reply
+        });
+
+        res.write(`data: [DONE]\n\n`);
+        res.end();
+      }
+
+    }, 8);
 
   } catch (e) {
     console.error(e);
-    res.json({ reply: "Server error ❌" });
+    res.end();
   }
 });
 

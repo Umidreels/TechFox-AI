@@ -4,24 +4,19 @@ import cors from "cors";
 
 const app = express();
 
-app.use(cors({
-  origin: "*"
-}));
-
+app.use(cors({ origin: "*" }));
 app.use(express.json());
 
-// 🔐 ENV
 const API_KEY = process.env.MISTRAL_API_KEY;
 
-// 🧠 MEMORY
-let history = [];
+// 🧠 HAR USER UCHUN MEMORY
+const userHistories = {};
 
-function addToHistory(role, content) {
-  history.push({ role, content });
-
-  if (history.length > 10) {
-    history = history.slice(-10);
+function getHistory(userId) {
+  if (!userHistories[userId]) {
+    userHistories[userId] = [];
   }
+  return userHistories[userId];
 }
 
 // 🚫 RATE LIMIT
@@ -31,7 +26,7 @@ app.use((req, res, next) => {
   const ip = req.headers["x-forwarded-for"] || req.socket.remoteAddress;
   const now = Date.now();
 
-  if (rateLimit[ip] && now - rateLimit[ip] < 1500) {
+  if (rateLimit[ip] && now - rateLimit[ip] < 4500) {
     return res.json({ reply: "Sekinroq yozing 🙂" });
   }
 
@@ -39,7 +34,7 @@ app.use((req, res, next) => {
   next();
 });
 
-// 🧪 HEALTH CHECK
+// 🧪 TEST
 app.get("/", (req, res) => {
   res.send("TechFox AI backend ishlayapti 🚀");
 });
@@ -52,14 +47,20 @@ app.post("/chat", async (req, res) => {
       return res.json({ reply: "API KEY yo‘q ❌" });
     }
 
-    const userMessage = req.body.message;
+    const userId = req.body.user_id || "default";
+    const message = req.body.message;
 
-    if (!userMessage) {
+    if (!message) {
       return res.json({ reply: "Xabar bo‘sh ❌" });
     }
 
-    // user history
-    addToHistory("user", userMessage);
+    const history = getHistory(userId);
+
+    history.push({ role: "user", content: message });
+
+    if (history.length > 10) {
+      userHistories[userId] = history.slice(-10);
+    }
 
     const apiRes = await fetch("https://api.mistral.ai/v1/conversations", {
       method: "POST",
@@ -74,52 +75,32 @@ app.post("/chat", async (req, res) => {
       })
     });
 
-    // ❌ API ERROR
     if (!apiRes.ok) {
       const err = await apiRes.text();
-      console.error("API ERROR:", err);
-
-      return res.json({
-        reply: "Serverda muammo ⚠️"
-      });
+      console.error(err);
+      return res.json({ reply: "Server xatolik ⚠️" });
     }
 
-    // 🔍 RAW
-    const raw = await apiRes.text();
+    const data = await apiRes.json();
 
-    let data;
-    try {
-      data = JSON.parse(raw);
-    } catch {
-      return res.json({ reply: "JSON parse xato ❌" });
-    }
-
-    // ✅ EXTRACT (SIZNING FORMATGA MOS)
     let reply = "";
 
-    if (data.outputs && data.outputs.length > 0) {
+    if (data.outputs?.length) {
       reply = data.outputs[0].content || "";
     }
 
-    if (!reply) {
-      reply = "No response";
-    }
+    if (!reply) reply = "No response";
 
-    // assistant history
-    addToHistory("assistant", reply);
+    history.push({ role: "assistant", content: reply });
 
     res.json({ reply });
 
   } catch (e) {
-    console.error("SERVER ERROR:", e);
-
-    res.json({
-      reply: "Server error ❌"
-    });
+    console.error(e);
+    res.json({ reply: "Server error ❌" });
   }
 });
 
-// 🚀 START
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {

@@ -26,7 +26,7 @@ app.use((req, res, next) => {
   const ip = req.headers["x-forwarded-for"] || req.socket.remoteAddress;
   const now = Date.now();
 
-  if (rateLimit[ip] && now - rateLimit[ip] < 6000) {
+  if (rateLimit[ip] && now - rateLimit[ip] < 60000) {
     return res.json({ reply: "Sekinroq yozing 🙂" });
   }
 

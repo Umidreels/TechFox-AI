@@ -34,17 +34,18 @@ app.use((req, res, next) => {
   next();
 });
 
-// test
+// health check
 app.get("/", (req, res) => {
   res.send("TechFox AI backend ishlayapti 🚀");
 });
 
 // ==========================
-// 🔥 STREAM ENDPOINT
+// 🔥 STREAM + STOP
 // ==========================
 app.post("/chat-stream", async (req, res) => {
-  try {
+  let interval;
 
+  try {
     const userId = req.body.user_id || "default";
     const message = req.body.message;
 
@@ -77,32 +78,38 @@ app.post("/chat-stream", async (req, res) => {
       })
     });
 
+    if (!apiRes.ok) {
+      res.write(`data: ${JSON.stringify("Xatolik ❌")}\n\n`);
+      return res.end();
+    }
+
     const data = await apiRes.json();
 
     let reply = "";
-
     if (data.outputs?.length) {
       reply = data.outputs[0].content || "";
     }
 
     if (!reply) reply = "No response";
 
-    // 🔥 TO‘G‘RI STREAM (chunk bilan)
+    // 🔥 STOP SUPPORT
+    req.on("close", () => {
+      if (interval) {
+        clearInterval(interval);
+        console.log("⛔ Stream to‘xtadi (client disconnect)");
+      }
+    });
+
+    // 🔥 STREAM (chunk)
     let i = 0;
     const chunkSize = 6;
 
-    const interval = setInterval(() => {
-
+    interval = setInterval(() => {
       if (i < reply.length) {
-
         const chunk = reply.slice(i, i + chunkSize);
-
         res.write(`data: ${JSON.stringify(chunk)}\n\n`);
-
         i += chunkSize;
-
       } else {
-
         clearInterval(interval);
 
         history.push({
@@ -113,7 +120,6 @@ app.post("/chat-stream", async (req, res) => {
         res.write(`data: [DONE]\n\n`);
         res.end();
       }
-
     }, 15);
 
   } catch (e) {

@@ -26,8 +26,18 @@ app.use((req, res, next) => {
   const ip = req.headers["x-forwarded-for"] || req.socket.remoteAddress;
   const now = Date.now();
 
-  if (rateLimit[ip] && now - rateLimit[ip] < 60000) {
-    return res.json({ reply: "Sekinroq yozing 🙂" });
+  if (rateLimit[ip] && now - rateLimit[ip] < 1500) {
+
+  res.writeHead(200, {
+    "Content-Type": "text/event-stream; charset=utf-8",
+    "Cache-Control": "no-cache",
+    "Connection": "keep-alive"
+  });
+
+  res.write(`data: ${JSON.stringify("Sekinroq yozing 🙂")}\n\n`);
+  res.write(`data: [DONE]\n\n`);
+
+  return res.end();
   }
 
   rateLimit[ip] = now;

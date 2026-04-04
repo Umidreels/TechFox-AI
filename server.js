@@ -9,7 +9,7 @@ app.use(express.json());
 
 const API_KEY = process.env.MISTRAL_API_KEY;
 
-// 🧠 MULTI USER MEMORY
+// 🧠 multi-user memory
 const userHistories = {};
 
 function getHistory(userId) {
@@ -19,7 +19,7 @@ function getHistory(userId) {
   return userHistories[userId];
 }
 
-// 🚫 RATE LIMIT
+// 🚫 rate limit
 const rateLimit = {};
 
 app.use((req, res, next) => {
@@ -34,20 +34,16 @@ app.use((req, res, next) => {
   next();
 });
 
-// 🧪 TEST
+// test
 app.get("/", (req, res) => {
   res.send("TechFox AI backend ishlayapti 🚀");
 });
 
 // ==========================
-// 🔥 STREAM CHAT
+// 🔥 STREAM ENDPOINT
 // ==========================
 app.post("/chat-stream", async (req, res) => {
   try {
-
-    if (!API_KEY) {
-      return res.end();
-    }
 
     const userId = req.body.user_id || "default";
     const message = req.body.message;
@@ -62,9 +58,8 @@ app.post("/chat-stream", async (req, res) => {
       userHistories[userId] = history.slice(-10);
     }
 
-    // SSE HEADERS
     res.writeHead(200, {
-      "Content-Type": "text/event-stream",
+      "Content-Type": "text/event-stream; charset=utf-8",
       "Cache-Control": "no-cache",
       "Connection": "keep-alive"
     });
@@ -82,11 +77,6 @@ app.post("/chat-stream", async (req, res) => {
       })
     });
 
-    if (!apiRes.ok) {
-      res.write(`data: Xatolik yuz berdi ❌\n\n`);
-      return res.end();
-    }
-
     const data = await apiRes.json();
 
     let reply = "";
@@ -97,14 +87,20 @@ app.post("/chat-stream", async (req, res) => {
 
     if (!reply) reply = "No response";
 
-    // 🔥 STREAM (harfma-harf)
+    // 🔥 TO‘G‘RI STREAM (chunk bilan)
     let i = 0;
+    const chunkSize = 6;
 
     const interval = setInterval(() => {
 
       if (i < reply.length) {
-        res.write(`data: ${reply[i]}\n\n`);
-        i++;
+
+        const chunk = reply.slice(i, i + chunkSize);
+
+        res.write(`data: ${JSON.stringify(chunk)}\n\n`);
+
+        i += chunkSize;
+
       } else {
 
         clearInterval(interval);
@@ -118,7 +114,7 @@ app.post("/chat-stream", async (req, res) => {
         res.end();
       }
 
-    }, 8);
+    }, 15);
 
   } catch (e) {
     console.error(e);

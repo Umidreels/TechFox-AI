@@ -4,13 +4,20 @@ import cors from "cors";
 
 const app = express();
 
-app.use(cors({ origin: "*" }));
+app.use(cors());
 app.use(express.json());
 
 const API_KEY = process.env.MISTRAL_API_KEY;
 
 // ==========================
-// MEMORY (multi-user)
+// HEALTH CHECK
+// ==========================
+app.get("/", (req, res) => {
+  res.send("TechFox AI ishlayapti 🚀");
+});
+
+// ==========================
+// MEMORY
 // ==========================
 const userHistories = {};
 
@@ -22,36 +29,20 @@ function getHistory(userId) {
 }
 
 // ==========================
-// RATE LIMIT (STREAM FIX)
+// RATE LIMIT (simple)
 // ==========================
 const rateLimit = {};
 
-app.use((req, res, next) => {
-  const ip = req.headers["x-forwarded-for"] || req.socket.remoteAddress;
+function isLimited(ip) {
   const now = Date.now();
 
-  if (rateLimit[ip] && now - rateLimit[ip] < 3000) {
-
-    res.writeHead(200, {
-      "Content-Type": "text/event-stream; charset=utf-8"
-    });
-
-    res.write(`data: ${JSON.stringify("Sekinroq yozing 🙂")}\n\n`);
-    res.write(`data: [DONE]\n\n`);
-
-    return res.end();
+  if (rateLimit[ip] && now - rateLimit[ip] < 1500) {
+    return true;
   }
 
   rateLimit[ip] = now;
-  next();
-});
-
-// ==========================
-// HEALTH
-// ==========================
-app.get("/", (req, res) => {
-  res.send("TechFox AI ishlayapti 🚀");
-});
+  return false;
+}
 
 // ==========================
 // CHAT STREAM
@@ -62,11 +53,20 @@ app.post("/chat-stream", async (req, res) => {
 
   try {
 
-    if (!API_KEY) {
+    const ip = req.headers["x-forwarded-for"] || req.socket.remoteAddress;
+
+    if (isLimited(ip)) {
       res.writeHead(200, {
         "Content-Type": "text/event-stream"
       });
 
+      res.write(`data: ${JSON.stringify("Sekinroq yozing 🙂")}\n\n`);
+      res.write(`data: [DONE]\n\n`);
+      return res.end();
+    }
+
+    if (!API_KEY) {
+      res.writeHead(200, { "Content-Type": "text/event-stream" });
       res.write(`data: ${JSON.stringify("API KEY yo‘q ❌")}\n\n`);
       res.write(`data: [DONE]\n\n`);
       return res.end();
@@ -78,7 +78,6 @@ app.post("/chat-stream", async (req, res) => {
     if (!message) return res.end();
 
     const history = getHistory(userId);
-
     history.push({ role: "user", content: message });
 
     if (history.length > 10) {
@@ -112,40 +111,34 @@ app.post("/chat-stream", async (req, res) => {
 
     const data = await apiRes.json();
 
-    // 🔥 TO‘G‘RI PARSE
     let reply = "";
 
     if (data.outputs?.length) {
-
       const content = data.outputs[0].content;
 
       if (typeof content === "string") {
         reply = content;
-      }
-
-      else if (Array.isArray(content)) {
+      } else if (Array.isArray(content)) {
         reply = content.map(i => i.text || "").join("");
       }
     }
 
     if (!reply) reply = "AI javob bermadi ❌";
 
-    // STOP
+    // STOP handling
     req.on("close", () => {
       if (interval) clearInterval(interval);
     });
 
-    // STREAM
     let i = 0;
-    const chunkSize = 6;
 
     interval = setInterval(() => {
 
       if (i < reply.length) {
 
-        const chunk = reply.slice(i, i + chunkSize);
+        const chunk = reply.slice(i, i + 5);
         res.write(`data: ${JSON.stringify(chunk)}\n\n`);
-        i += chunkSize;
+        i += 5;
 
       } else {
 
@@ -163,13 +156,16 @@ app.post("/chat-stream", async (req, res) => {
     }, 15);
 
   } catch (e) {
-    console.error(e);
+    console.error("SERVER ERROR:", e);
     res.end();
   }
 });
 
+// ==========================
+// PORT (Railway FIX)
+// ==========================
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
-  console.log("Server running:", PORT);
+  console.log("Server running on", PORT);
 });

@@ -9,7 +9,9 @@ app.use(express.json());
 
 const API_KEY = process.env.MISTRAL_API_KEY;
 
-// 🧠 multi-user memory
+// ==========================
+// MEMORY (multi-user)
+// ==========================
 const userHistories = {};
 
 function getHistory(userId) {
@@ -19,43 +21,57 @@ function getHistory(userId) {
   return userHistories[userId];
 }
 
-// 🚫 rate limit
+// ==========================
+// RATE LIMIT (STREAM FIX)
+// ==========================
 const rateLimit = {};
 
 app.use((req, res, next) => {
   const ip = req.headers["x-forwarded-for"] || req.socket.remoteAddress;
   const now = Date.now();
 
-  if (rateLimit[ip] && now - rateLimit[ip] < 1500) {
+  if (rateLimit[ip] && now - rateLimit[ip] < 3000) {
 
-  res.writeHead(200, {
-    "Content-Type": "text/event-stream; charset=utf-8",
-    "Cache-Control": "no-cache",
-    "Connection": "keep-alive"
-  });
+    res.writeHead(200, {
+      "Content-Type": "text/event-stream; charset=utf-8"
+    });
 
-  res.write(`data: ${JSON.stringify("Sekinroq yozing 🙂")}\n\n`);
-  res.write(`data: [DONE]\n\n`);
+    res.write(`data: ${JSON.stringify("Sekinroq yozing 🙂")}\n\n`);
+    res.write(`data: [DONE]\n\n`);
 
-  return res.end();
+    return res.end();
   }
 
   rateLimit[ip] = now;
   next();
 });
 
-// health check
+// ==========================
+// HEALTH
+// ==========================
 app.get("/", (req, res) => {
-  res.send("TechFox AI backend ishlayapti 🚀");
+  res.send("TechFox AI ishlayapti 🚀");
 });
 
 // ==========================
-// 🔥 STREAM + STOP
+// CHAT STREAM
 // ==========================
 app.post("/chat-stream", async (req, res) => {
+
   let interval;
 
   try {
+
+    if (!API_KEY) {
+      res.writeHead(200, {
+        "Content-Type": "text/event-stream"
+      });
+
+      res.write(`data: ${JSON.stringify("API KEY yo‘q ❌")}\n\n`);
+      res.write(`data: [DONE]\n\n`);
+      return res.end();
+    }
+
     const userId = req.body.user_id || "default";
     const message = req.body.message;
 
@@ -89,37 +105,50 @@ app.post("/chat-stream", async (req, res) => {
     });
 
     if (!apiRes.ok) {
-      res.write(`data: ${JSON.stringify("Xatolik ❌")}\n\n`);
+      res.write(`data: ${JSON.stringify("API xatolik ❌")}\n\n`);
+      res.write(`data: [DONE]\n\n`);
       return res.end();
     }
 
     const data = await apiRes.json();
 
+    // 🔥 TO‘G‘RI PARSE
     let reply = "";
+
     if (data.outputs?.length) {
-      reply = data.outputs[0].content || "";
+
+      const content = data.outputs[0].content;
+
+      if (typeof content === "string") {
+        reply = content;
+      }
+
+      else if (Array.isArray(content)) {
+        reply = content.map(i => i.text || "").join("");
+      }
     }
 
-    if (!reply) reply = "No response";
+    if (!reply) reply = "AI javob bermadi ❌";
 
-    // 🔥 STOP SUPPORT
+    // STOP
     req.on("close", () => {
-      if (interval) {
-        clearInterval(interval);
-        console.log("⛔ Stream to‘xtadi (client disconnect)");
-      }
+      if (interval) clearInterval(interval);
     });
 
-    // 🔥 STREAM (chunk)
+    // STREAM
     let i = 0;
     const chunkSize = 6;
 
     interval = setInterval(() => {
+
       if (i < reply.length) {
+
         const chunk = reply.slice(i, i + chunkSize);
         res.write(`data: ${JSON.stringify(chunk)}\n\n`);
         i += chunkSize;
+
       } else {
+
         clearInterval(interval);
 
         history.push({
@@ -130,6 +159,7 @@ app.post("/chat-stream", async (req, res) => {
         res.write(`data: [DONE]\n\n`);
         res.end();
       }
+
     }, 15);
 
   } catch (e) {

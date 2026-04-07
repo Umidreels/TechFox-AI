@@ -38,17 +38,15 @@ const rateLimit = {};
 
 function isLimited(id) {
   const now = Date.now();
-
   if (rateLimit[id] && now - rateLimit[id] < 1500) {
     return true;
   }
-
   rateLimit[id] = now;
   return false;
 }
 
 // ==========================
-// AI REQUEST FUNCTION
+// AI FUNCTION
 // ==========================
 async function askAI(history) {
 
@@ -235,18 +233,25 @@ if (BOT_TOKEN) {
 
     try {
 
-      const res = await fetch(`http://127.0.0.1:${PORT}/chat`, {
       const history = getHistory(chatId.toString());
-history.push({ role: "user", content: text });
+      history.push({ role: "user", content: text });
 
-const reply = await askAI(history);
+      const reply = await askAI(history);
 
-history.push({
-  role: "assistant",
-  content: reply
-});
+      history.push({
+        role: "assistant",
+        content: reply
+      });
 
-bot.sendMessage(chatId, reply);
+      clearInterval(typing);
+
+      bot.sendMessage(chatId, reply);
+
+    } catch (e) {
+      clearInterval(typing);
+      console.error("BOT ERROR:", e);
+      bot.sendMessage(chatId, "Xatolik ❌");
+    }
   });
 
   console.log("🤖 Telegram bot ishga tushdi");

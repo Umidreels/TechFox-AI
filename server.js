@@ -236,26 +236,17 @@ if (BOT_TOKEN) {
     try {
 
       const res = await fetch(`http://127.0.0.1:${PORT}/chat`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          message: text,
-          user_id: chatId.toString()
-        })
-      });
+      const history = getHistory(chatId.toString());
+history.push({ role: "user", content: text });
 
-      const data = await res.json();
+const reply = await askAI(history);
 
-      clearInterval(typing);
+history.push({
+  role: "assistant",
+  content: reply
+});
 
-      bot.sendMessage(chatId, data.reply);
-
-    } catch (e) {
-      clearInterval(typing);
-      bot.sendMessage(chatId, "Xatolik ❌");
-    }
+bot.sendMessage(chatId, reply);
   });
 
   console.log("🤖 Telegram bot ishga tushdi");
